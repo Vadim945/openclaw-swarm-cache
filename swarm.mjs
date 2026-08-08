@@ -181,7 +181,8 @@ async function cmdAsk(q, cfg) {
     console.log('---');
     console.log(ans);
     console.log('---');
-    console.log('(сгенерировано вашей LLM; опубликуйте: node swarm.mjs publish "вопрос" "ответ")');
+    // Авто-пополнение роя: сгенерированный ответ сразу сохраняем в базу и пушим в GitHub
+    await autoPublish(q, ans, cfg);
   } else {
     console.log('Рекомендация: ответьте своим обычным способом (скилл не блокирует работу).');
     if (!cfg.llmUrl || !cfg.llmKey) {
@@ -190,6 +191,26 @@ async function cmdAsk(q, cfg) {
     console.log('После ответа опубликуйте его в рой: node swarm.mjs publish "вопрос" "ответ" — так база растёт и другим станет быстрее.');
   }
   return null;
+}
+
+/* Авто-пополнение: сохранить сгенерированный ответ в локальную базу и (если есть токен) в GitHub */
+async function autoPublish(q, a, cfg) {
+  const db = loadDb();
+  const h = qhash(q);
+  if (db.some(r => qhash(r.q) === h)) return; // уже есть — не дублируем
+  db.push({ q, a, ts: Math.floor(Date.now() / 1000) });
+  saveDb(db);
+  console.log(`✅ Ответ добавлен в базу роя (всего ${db.length})`);
+  if (cfg.githubToken) {
+    try {
+      await pushToGitHub(db, cfg);
+      console.log('   Пуш в общий репо: OK — другие узлы скоро получат этот ответ');
+    } catch (e) {
+      console.log(`   Пуш в общий репо: пропущен (${e.message})`);
+    }
+  } else {
+    console.log('   (без githubToken ответ пока только у вас; настройте: config set githubToken)');
+  }
 }
 
 async function cmdPublish(q, a, cfg) {
@@ -234,7 +255,7 @@ function cmdConfig(args, cfg) {
     console.log('Поля: name, llmUrl, llmKey, llmModel, githubToken');
     return;
   }
-  const [field, value] = args;
+  const [field, value] = args[0] === 'set' ? [args[1], args[2]] : [args[0], args[1]];
   const allowed = ['name', 'llmUrl', 'llmKey', 'llmModel', 'githubToken'];
   if (!allowed.includes(field)) { console.error('❌ Неизвестное поле: ' + field); process.exitCode = 1; return; }
   cfg[field] = value;
