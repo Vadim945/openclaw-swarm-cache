@@ -175,13 +175,19 @@ async function cmdAsk(q, cfg) {
     console.log(hit.a);
     return hit;
   }
-  console.log('[MISS] нет в базе роя');
+  console.log('[MISS] ответа в рое нет');
   const ans = await generate(q, cfg).catch(e => { console.error('⚠ LLM: ' + e.message); return null; });
   if (ans) {
     console.log('---');
     console.log(ans);
     console.log('---');
     console.log('(сгенерировано вашей LLM; опубликуйте: node swarm.mjs publish "вопрос" "ответ")');
+  } else {
+    console.log('Рекомендация: ответьте своим обычным способом (скилл не блокирует работу).');
+    if (!cfg.llmUrl || !cfg.llmKey) {
+      console.log('Хотите, чтобы рой сам генерировал ответы? Настройте LLM: node swarm.mjs config set llmUrl/llmKey');
+    }
+    console.log('После ответа опубликуйте его в рой: node swarm.mjs publish "вопрос" "ответ" — так база растёт и другим станет быстрее.');
   }
   return null;
 }
